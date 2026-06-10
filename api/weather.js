@@ -27,6 +27,10 @@ export default async function handler(req, res) {
     const html = await response.text();
     const $ = cheerio.load(html);
 
+    // 臨時 debug — 看氣溫附近的 HTML
+const rawHtml = html.substring(0, 8000);
+return res.status(200).json({ debug_html: rawHtml });
+
     let times = [];
     let rains = [];
     let temps = [];
