@@ -18,22 +18,23 @@ export default async function handler(req, res) {
 
   try {
     const response = await fetch(URL_MAP[target], {
-      headers: { 
+      headers: {
         'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1',
         'Accept-Language': 'ja,zh-TW;q=0.9'
       }
     });
+
     const html = await response.text();
     const $ = cheerio.load(html);
 
-    const hourlyData = [];
     let times = [];
     let rains = [];
+    let temps = [];
 
-    // 1. 抓時間點
-    $('tr, div, p, span').each((i, el) => {
+    // 抓時間
+    $('[class*="time"], [class*="hour"], td, th, span, div').each((i, el) => {
       const txt = $(el).text().trim().replace(/\s+/g, '');
-      if (/^(\d+)(時|:00)$/.test(txt)) {
+      if (/^(\d{1,2})(時|時00分|:00)$/.test(txt)) {
         const hour = txt.match(/\d+/)[0];
         const timeStr = `${hour.padStart(2, '0')}:00`;
         if (!times.includes(timeStr) && times.length < 8) {
@@ -42,70 +43,50 @@ export default async function handler(req, res) {
       }
     });
 
-    // 2. 抓降雨機率
-    $('td, div, span').each((i, el) => {
+    // 抓氣溫
+    $('[class*="temp"], [class*="temperature"], td, span, div').each((i, el) => {
       const txt = $(el).text().trim().replace(/\s+/g, '');
-      if (/^\d{1,3}%$/.test(txt)) {
-        if (rains.length < 8) {
-          rains.push(txt);
-        }
+      if (/^-?\d{1,2}°$/.test(txt)) {
+        if (temps.length < 8) temps.push(txt);
       }
     });
 
-    // 2.5 抓氣溫
-let temps = [];
-$('td, div, span').each((i, el) => {
-  const txt = $(el).text().trim().replace(/\s+/g, '');
-  if (/^-?\d{1,2}°$/.test(txt)) {
-    if (temps.length < 8) temps.push(txt);
-  }
-});
-
-
-
-    // 3. 備援清洗機制
-    if (rains.length < times.length) {
-      const allRainsInHtml = html.match(/\d+%/g);
-      if (allRainsInHtml) {
-        allRainsInHtml.forEach(r => {
-          if (rains.length < 8 && !rains.includes(r)) rains.push(r);
-        });
+    // 抓降雨機率
+    $('[class*="rain"], [class*="precip"], td, span, div').each((i, el) => {
+      const txt = $(el).text().trim().replace(/\s+/g, '');
+      if (/^\d{1,3}%$/.test(txt)) {
+        if (rains.length < 8) rains.push(txt);
       }
+    });
+
+    // 如果任何一個沒抓到足夠資料，回傳失敗
+    if (times.length === 0 || temps.length === 0 || rains.length === 0) {
+      return res.status(200).json({
+        success: false,
+        error: '爬蟲無法解析頁面結構，可能網站改版',
+        debug: { times, temps, rains }
+      });
     }
 
-    // 4. 智慧型對齊組裝
-    if (times.length > 0) {
-      times.forEach((t, index) => {
-        const rainPercent = rains[index] || '10%';
-        hourlyData.push({
-          time: t,
-          temp: temps[index] || '—',
- // 給予 6 月長崎標準舒適氣溫
-          rain: rainPercent,
-          weather: parseInt(rainPercent) >= 40 ? '局部陣雨' : '多雲時晴'
-        });
-      }); // 👈 剛才就是這裡漏了括號，導致伺服器崩潰！
-    }
-
-    // 5. 終極保險兜底
-    if (hourlyData.length === 0) {
-      const currentHour = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Tokyo" })).getHours();
-      for (let i = 1; i <= 8; i++) {
-        const nextHour = (currentHour + i) % 24;
-        hourlyData.push({
-          time: `${String(nextHour).padStart(2, '0')}:00`,
-          temp: '24°',
-          rain: i % 4 === 0 ? '40%' : '10%',
-          weather: '多雲時晴'
-        });
-      }
+    const count = Math.min(times.length, temps.length, rains.length, 8);
+    const hourly = [];
+    for (let i = 0; i < count; i++) {
+      hourly.push({
+        time: times[i],
+        temp: temps[i],
+        rain: rains[i],
+        weather: parseInt(rains[i]) >= 40 ? '局部陣雨' : '多雲時晴'
+      });
     }
 
     return res.status(200).json({
       success: true,
       location: target,
-      current: { temp: hourlyData[0]?.temp || '24°', weather: "多雲時晴" },
-      hourly: hourlyData.sort((a, b) => parseInt(a.time) - parseInt(b.time))
+      current: {
+        temp: temps[0],
+        weather: parseInt(rains[0]) >= 40 ? '局部陣雨' : '多雲時晴'
+      },
+      hourly
     });
 
   } catch (error) {
