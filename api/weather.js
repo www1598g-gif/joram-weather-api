@@ -52,6 +52,17 @@ export default async function handler(req, res) {
       }
     });
 
+    // 2.5 抓氣溫
+let temps = [];
+$('td, div, span').each((i, el) => {
+  const txt = $(el).text().trim().replace(/\s+/g, '');
+  if (/^-?\d{1,2}°$/.test(txt)) {
+    if (temps.length < 8) temps.push(txt);
+  }
+});
+
+
+
     // 3. 備援清洗機制
     if (rains.length < times.length) {
       const allRainsInHtml = html.match(/\d+%/g);
@@ -68,7 +79,8 @@ export default async function handler(req, res) {
         const rainPercent = rains[index] || '10%';
         hourlyData.push({
           time: t,
-          temp: (24 + (index % 2)) + '°', // 給予 6 月長崎標準舒適氣溫
+          temp: temps[index] || '—',
+ // 給予 6 月長崎標準舒適氣溫
           rain: rainPercent,
           weather: parseInt(rainPercent) >= 40 ? '局部陣雨' : '多雲時晴'
         });
