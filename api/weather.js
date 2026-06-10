@@ -16,10 +16,13 @@ export default async function handler(req, res) {
 
   const { lat, lon } = COORDS[target];
   const headers = {
-    'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1',
-    'Accept-Language': 'ja,zh-TW;q=0.9',
-    'Referer': `https://weathernews.jp/onebox/${lat}/${lon}/`
-  };
+  'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1',
+  'Accept': 'application/json, text/plain, */*',
+  'Accept-Language': 'ja,zh-TW;q=0.9',
+  'Origin': 'https://weathernews.jp',
+  'Referer': 'https://weathernews.jp/',
+  'X-Requested-With': 'XMLHttpRequest'
+};
 
   try {
     const [pinpointRes, mrfRes] = await Promise.all([
